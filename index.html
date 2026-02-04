@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Abrox – Private Lounge</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1f26">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="emoji-pack.js" defer></script>
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg:'#1c1f26',
+        panel:'#232833',
+        border:'#343a4a',
+        muted:'#a0a6b5',
+        accent:'#6bdba7',
+        bubble:'#262b38',
+        bubbleOut:'#2b3242',
+        send:'#3b82f6'
+      }
+    }
+  }
+}
+</script>
+
+<style>
+/* ---------- Core styles (kept from your approved UI) ---------- */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+:root{--muted:#a0a6b5}
+
+/* Layout */
+.header{background:#232833;border-bottom:1px solid #343a4a}
+.flex{display:flex}
+.items-center{align-items:center}
+.justify-between{justify-content:space-between}
+
+/* members / typing rows */
+.members-row,.typing-row{
+  padding:0 16px;height:22px;font-size:12px;display:flex;align-items:center
+}
+.members-row{color:var(--muted)}
+.typing-row{gap:8px;font-weight:500;color:#6bdba7;display:none}
+.typing-row.active{display:flex}
+.members-row.hidden{display:none}
+
+/* typing dots */
+.typing-dots{display:flex;gap:3px}
+.typing-dots span{
+  width:4px;height:4px;border-radius:999px;background:#6bdba7;opacity:.25;animation:blink 1.4s infinite both
+}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+/* ================= CHAT ================= */
+.msg{
+  display:flex;gap:8px;margin-bottom:12px;align-items:flex-end;
+  transition:transform .18s ease, opacity .18s ease;
+  will-change: transform, opacity;
+  contain: layout size style;
+}
+.msg.out{justify-content:flex-end}
+.grouped{margin-top:4px}
+
+/* avatar */
+.avatar{width:42px;height:42px;border-radius:999px;object-fit:cover}
+.msg.grouped .avatar{visibility:hidden}
+
+/* bubble styles — minimal shadows for perf */
+.bubble{
+  max-width:74%;padding:10px 12px;font-size:14px;line-height:1.5;position:relative;
+  background:#262b38;border-radius:10px 20px 20px 10px; /* default in-msg */
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+.msg.out .bubble{background:#2b3242;border:1px solid #343a4a;border-radius:20px 10px 10px 20px}
+.msg.in .bubble::before{content:'';position:absolute;left:-4px;bottom:12px;width:10px;height:10px;background:#262b38;transform:rotate(45deg)}
+.msg.out .bubble::after{content:'';position:absolute;right:-4px;bottom:12px;width:10px;height:10px;background:#2b3242;transform:rotate(45deg)}
+.grouped.in .bubble::before,.grouped.out .bubble::after{display:none}
+
+/* lighten UI painting cost by avoiding complex CSS like gradients/shadow-heavy styles */
+.sender{font-size:12px;font-weight:600;color:#6bdba7;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+.time{font-size:10px;opacity:.55;margin-top:6px;display:flex;gap:6px;justify-content:flex-end;align-items:center}
+
+/* small verified dot */
+.verified-dot{width:10px;height:10px;border-radius:999px;background:#22c55e;display:inline-block;margin-left:6px;border:2px solid #1c1f26}
+
+/* audio duration */
+.audio-duration{display:inline-block;font-size:11px;color:var(--muted);margin-left:8px;vertical-align:middle}
+
+/* date pill */
+.date-pill{position:sticky;top:8px;z-index:10;margin:18px auto;padding:6px 14px;border-radius:999px;background:rgba(0,0,0,.35);backdrop-filter:blur(6px);font-size:11px;opacity:0;animation:fadeDate .35s ease forwards}
+@keyframes fadeDate{to{opacity:1}}
+
+/* reply preview */
+.reply-preview{font-size:11px;opacity:.95;border-left:3px solid #6bdba7;padding-left:8px;margin-bottom:6px;cursor:pointer;background:rgba(0,0,0,0.06);border-radius:6px;padding-top:6px;padding-bottom:6px}
+.reply-preview .snippet{opacity:.85;font-size:13px;margin-top:4px}
+.reply-preview .close-btn{cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px}
+
+/* pinned */
+.pinned-banner{background:#232833;border-bottom:1px solid #343a4a;padding:8px 16px;font-size:13px;display:flex;gap:8px;align-items:center;cursor:pointer}
+.pinned-banner.hidden{display:none}
+
+/* input / waveform area (lightweight) */
+.footer-wrap{position:relative;background:transparent}
+.input-shell{display:flex;align-items:center;background:#1c1f26;border-radius:999px;padding:10px 12px;gap:8px;width:100%;position:relative;overflow:hidden;contain:layout}
+.input-shell.recording{padding:10px 14px}
+#waveform{flex:1;height:36px;display:none;margin-left:6px;margin-right:6px}
+.input-shell.recording #waveform{display:block}
+.input-shell.recording input{display:none}
+
+/* mic lock icon slide-up */
+.input-shell .mic-lock-icon{position:absolute;left:12px;bottom:50%;transform:translateY(14px);display:flex;align-items:center;gap:6px;opacity:0;transition:transform .18s ease, opacity .18s ease;pointer-events:none;color:#fff}
+.input-shell.locked .mic-lock-icon{transform:translateY(0);opacity:1}
+
+/* timer */
+.recording-timer{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:13px;color:#cfe9ff;background:rgba(59,130,246,0.06);padding:4px 8px;border-radius:999px;border:1px solid rgba(59,130,246,0.12);display:none}
+.input-shell.recording .recording-timer{display:block}
+
+/* cancel overlay */
+.recording-cancel-overlay{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-weight:600;opacity:0;transition:opacity .12s ease;color:#ff6b6b}
+.recording-cancel-overlay.visible{opacity:1;pointer-events:auto}
+
+/* context menu */
+.context-menu{background:#11121a;border:1px solid #343a4a;border-radius:8px;padding:6px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.context-menu .menu-item{padding:6px 10px;cursor:pointer;white-space:nowrap}
+.context-menu .menu-item:hover{background:rgba(255,255,255,0.02)}
+
+/* unread button */
+#unreadBtn{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:#3b82f6;color:#fff;padding:6px 14px;border-radius:999px;font-size:12px;display:none;z-index:40}
+
+/* sidebar */
+#sidebar{transition:transform .25s ease}
+#memberSearch{width:100%;padding:6px 10px;border-radius:999px;background:#1c1f26;border:1px solid #343a4a;font-size:12px;outline:none}
+.member-row{display:flex;gap:8px;align-items:center}
+.role-pill{font-size:10px;padding:2px 6px;border-radius:999px}
+.role-pill.admin{background:#ef4444;color:white}
+.role-pill.mod{background:#7c3aed;color:white}
+
+/* small-phone specific */
+@media (max-width:420px){
+  .avatar{width:36px;height:36px}
+  .bubble{font-size:13px}
+}
+</style>
+</head>
+<body class="bg-bg text-white h-[100dvh] overflow-hidden no-shadows">
+<div class="flex h-full">
+  <main class="flex flex-col flex-1 border-r border-border" style="min-width:0">
+    <header class="header">
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="flex gap-3 items-center">
+          <img src="assets/logo.png" class="w-9 h-9 rounded" alt="logo">
+          <div style="min-width:0">
+            <div style="font-size:0.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Abrox Binary Bot – Private Lounge</div>
+            <div class="flex items-center gap-1 text-xs" style="color:var(--muted)">
+              <i data-lucide="lock" class="w-3 h-3" aria-hidden="true"></i>
+              <span>Private Group</span>
+            </div>
+          </div>
+        </div>
+        <button id="membersBtn" aria-label="Members"><i data-lucide="users"></i></button>
+      </div>
+
+      <div class="members-row" id="membersRow" aria-hidden="false">
+        Members: <strong id="memberCount">4,872</strong>
+        <span class="mx-2">•</span>
+        Online: <strong id="onlineCount">0</strong>
+      </div>
+
+      <div class="typing-row" id="typingRow">
+        <div class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span id="typingText"></span>
+      </div>
+
+      <div style="padding:0 16px 8px 16px;font-size:11px;color:var(--muted)">Demo discussion · Verification required</div>
+    </header>
+
+    <div id="pinnedBanner" class="pinned-banner hidden" role="button" tabindex="0">
+      <i data-lucide="pin" id="pinnedIcon"></i>
+      <span id="pinnedText" class="flex-1 truncate"></span>
+      <button id="unpinBtn" aria-label="Unpin"><i data-lucide="x"></i></button>
+    </div>
+
+    <section id="chat" class="flex-1 overflow-y-auto px-4 py-4" aria-live="polite" role="list" style="min-width:0;contain:content">
+      <div class="text-center" style="color:var(--muted);font-size:13px;margin-bottom:16px;line-height:1.25">
+        📌 <strong>Group Rules</strong><br>
+        New members are read-only until verified<br>
+        Admins DM individually — No screenshots in chat
+      </div>
+    </section>
+
+    <button id="unreadBtn" aria-hidden="true">⬇ New messages</button>
+
+    <footer class="bg-panel border-t border-border px-4 py-3 footer-wrap" style="min-width:0">
+      <div id="replyPreviewContainer" class="px-2"></div>
+      <div class="recording-cancel-overlay" id="cancelOverlay">Swipe left to cancel</div>
+      <div class="flex items-center gap-2">
+        <button id="emojiBtn" aria-label="Emoji"><i data-lucide="smile"></i></button>
+
+        <div class="input-shell" id="inputShell" aria-live="polite">
+          <div class="mic-lock-icon" aria-hidden="true"><i data-lucide="lock"></i><span class="text-xs" style="color:var(--muted)">Recording locked</span></div>
+          <input id="input" class="flex-1 bg-transparent outline-none text-sm" placeholder="Message" autocomplete="off" aria-label="Message input" style="min-width:0">
+          <canvas id="waveform" aria-hidden="true"></canvas>
+          <div class="recording-timer" id="recordingTimer" aria-hidden="true">0:00</div>
+        </div>
+
+        <div class="flex items-center gap-2 ml-auto">
+          <button id="mediaBtn" aria-label="Attach"><i data-lucide="paperclip"></i></button>
+          <button id="micBtn" aria-pressed="false" aria-label="Record voice"><i data-lucide="mic"></i></button>
+          <button id="send" class="hidden text-send" aria-label="Send"><i data-lucide="send"></i></button>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <aside id="sidebar" class="fixed right-0 top-0 w-72 h-full bg-panel border-l border-border translate-x-full z-50 flex flex-col" aria-hidden="true">
+    <div class="p-4 border-b border-border flex justify-between">
+      <strong>Members</strong>
+      <button id="closeSidebar" aria-label="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="p-3">
+      <input id="memberSearch" placeholder="Search members…" aria-label="Search members">
+    </div>
+    <div id="memberList" class="flex-1 overflow-y-auto p-3 space-y-3" role="list" style="min-width:0"></div>
+  </aside>
+
+  <input type="file" id="fileInput" class="hidden" aria-hidden="true">
+</div>
+
+<!-- SCRIPT LOAD ORDER: these reference filenames we will deliver one-by-one -->
+<!-- icons.js provides centralized lucide helper -->
+<script src="icons.js"></script>
+
+<!-- Synthetic people (names + avatars) -->
+<script src="synthetic-people.js"></script>
+
+<!-- Message pool generator -->
+<script src="message-pool.js"></script>
+
+<!-- Presence manager (baseline online 76, nudges) -->
+<script src="presence-manager.js"></script>
+
+<!-- Typing engine (passive) -->
+<script src="typing-engine.js"></script>
+
+<!-- Simulation engine (streams messages or manual) -->
+<script src="simulation-engine.js"></script>
+
+<!-- Unified message renderer (message.js) - will be the single renderMessage implementation -->
+<script src="message.js"></script>
+
+<!-- UI adapter (prefill handshake, sidebar, reply/pin wiring, attachment hooks) -->
+<script src="ui-adapter.js"></script>
+
+<!-- pre-cache & service worker -->
+<script src="precache.js"></script>
+<script src="sw.js"></script>
+
+<script>
+/* ---------- Full UI glue (uses window.renderMessage if present; DOES NOT define a renderer) ---------- */
+(function(){
+  window._abrox = window._abrox || {};
+
+  // minimal state
+  let replyTo = null;
+  window.sampleMembers = window.sampleMembers || [];
+
+  function escapeHtml(s){ return (''+s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+  function formatTime(ts) {
+    const d = new Date(ts || Date.now());
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
+
+  // presence helper (UI-visible)
+  window.presenceOf = function(m){
+    const d = Date.now() - (m.lastActive || 0);
+    if(d < 90*1000) return 'online';
+    if(d < 300*1000) return 'idle';
+    return 'offline';
+  };
+
+  // Exposed: setSampleMembers (SyntheticPeople.injectToUI calls this)
+  window._abrox.setSampleMembers = function(members){
+    window.sampleMembers = members || [];
+    const pc = document.getElementById('memberCount');
+    if(pc) pc.textContent = (members.length||0).toLocaleString();
+    renderMemberWindow?.();
+  };
+
+  // show typing (used by SimulationEngine/UIAdapter)
+  window._abrox.showTyping = function(names){
+    try{
+      const typingRow = document.getElementById('typingRow');
+      const typingText = document.getElementById('typingText');
+      if(!typingRow || !typingText) return;
+      if(!names || !names.length){ typingRow.classList.remove('active'); document.getElementById('membersRow').classList.remove('hidden'); return; }
+      typingText.textContent = names.length === 1 ? `${names[0]} is typing…` : names.length === 2 ? `${names[0]} and ${names[1]} are typing…` : `${names.length} people are typing…`;
+      typingRow.classList.add('active'); document.getElementById('membersRow').classList.add('hidden');
+      setTimeout(()=>{ typingRow.classList.remove('active'); document.getElementById('membersRow').classList.remove('hidden'); }, 1000 + Math.random()*1800);
+    }catch(e){ console.error(e); }
+  };
+
+  // render member list (lightweight window) - implementation moved to ui-adapter if present
+  function renderMemberWindow(){
+    if(typeof window._abrox.renderMemberWindow === 'function'){ window._abrox.renderMemberWindow(); return; }
+    const memberListEl = document.getElementById('memberList');
+    if(!memberListEl) return;
+    memberListEl.innerHTML = '';
+    const slice = (window.sampleMembers || []).slice(0, 120);
+    slice.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'member-row';
+      div.setAttribute('role','listitem');
+      div.innerHTML = `<div style="display:flex;gap:8px;align-items:center">
+        <div style="position:relative">
+          <img src="${p.avatar}" class="w-10 h-10 rounded-full avatar" alt="${escapeHtml(p.displayName)}" loading="lazy" width="40" height="40">
+          <span style="position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:999px;background:${presenceOf(p)==='online'?'#22c55e':presenceOf(p)==='idle'?'#f59e0b':'#94a3b8'};border:2px solid #1c1f26"></span>
+        </div>
+        <div style="min-width:0">
+          <div style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.displayName)}</div>
+          <div style="font-size:11px;color:var(--muted)">${p.role}</div>
+        </div>
+      </div>`;
+      memberListEl.appendChild(div);
+    });
+  }
+
+  // interactions: contextmenu & touch longpress (ui-adapter will augment)
+  window.attachMessageInteractions = window.attachMessageInteractions || function(domEl, msg){
+    if(!domEl) return;
+    domEl.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault(); if(typeof window._abrox.showContextMenu === 'function') window._abrox.showContextMenu(ev.clientX, ev.clientY, msg, domEl);
+    });
+    let touchTimer = null, startX=0, startY=0;
+    domEl.addEventListener('touchstart', (ev) => {
+      if(touchTimer) clearTimeout(touchTimer);
+      const t = ev.touches && ev.touches[0];
+      if(!t) return;
+      startX = t.clientX; startY = t.clientY;
+      touchTimer = setTimeout(() => { if(typeof window._abrox.showContextMenu === 'function') window._abrox.showContextMenu(t.clientX, t.clientY, msg, domEl); touchTimer = null; }, 520);
+    }, {passive:true});
+    domEl.addEventListener('touchmove', (ev) => {
+      if(!touchTimer) return;
+      const t = ev.touches && ev.touches[0];
+      if(!t) return;
+      if(Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12){
+        clearTimeout(touchTimer); touchTimer = null;
+      }
+    }, {passive:true});
+    domEl.addEventListener('touchend', () => { if(touchTimer){ clearTimeout(touchTimer); touchTimer = null; } });
+  };
+
+  // pin behavior helper (ui-adapter will wire event handlers)
+  window.pinMessage = window.pinMessage || function(id){
+    const el = document.querySelector(`[data-id="${id}"]`);
+    let txt = 'Pinned message';
+    if(el && el.querySelector('.content')) txt = el.querySelector('.content').textContent;
+    const pb = document.getElementById('pinnedText');
+    if(pb) pb.textContent = txt.length > 160 ? txt.slice(0,157) + '...' : txt;
+    const banner = document.getElementById('pinnedBanner');
+    if(banner) banner.classList.remove('hidden');
+    try{ localStorage.setItem('pinned_message_id', id); localStorage.setItem('pinned_message_text', txt); }catch(e){}
+  };
+
+  // reply helpers (ui-adapter implements setReplyTo that uses DOM)
+  window.setReplyTo = window.setReplyTo || function(msgId){
+    // delegated to ui-adapter implementation
+    if(typeof window._abrox.setReplyTo === 'function'){ window._abrox.setReplyTo(msgId); return; }
+  };
+
+  // send message helper (creates a minimal message object and renders it) - uses unified renderMessage
+  function doSendMessage(text){
+    if(!text || !text.trim()) return;
+    const m = {
+      id: 'local_' + Date.now(),
+      name: 'You',
+      displayName: 'You',
+      role: 'YOU',
+      verified: true,
+      avatar: '',
+      text: text,
+      out: true,
+      time: Date.now(),
+      replyTo: null,
+      pinned: false,
+      attachment: null
+    };
+    if(typeof window.renderMessage === 'function'){ window.renderMessage(m, true); }
+    // clear UI
+    const input = document.getElementById('input');
+    if(input) { input.value = ''; toggleSendButton(); }
+    // notify simulation engine if present
+    if(window.simulationEngine && typeof window.simulationEngine.onLocalSend === 'function') window.simulationEngine.onLocalSend(m);
+  }
+
+  // show/hide send button depending on input content
+  function toggleSendButton(){
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+    if(!input || !send) return;
+    if(input.value && input.value.trim().length){
+      send.classList.remove('hidden');
+    } else {
+      send.classList.add('hidden');
+    }
+  }
+
+  // wire send events
+  document.addEventListener('click', (e) => {
+    if(e.target.closest && e.target.closest('#send')){
+      const input = document.getElementById('input');
+      if(input) doSendMessage(input.value);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    const input = document.getElementById('input');
+    if(!input) return;
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      doSendMessage(input.value);
+    }
+  });
+  document.addEventListener('input', (e) => {
+    if(e.target && e.target.id === 'input') toggleSendButton();
+  });
+
+  // sidebar toggle
+  document.getElementById('membersBtn')?.addEventListener('click', ()=>{
+    const sb = document.getElementById('sidebar');
+    if(!sb) return;
+    const hidden = sb.classList.contains('translate-x-full');
+    if(hidden){
+      sb.classList.remove('translate-x-full');
+      sb.setAttribute('aria-hidden','false');
+    } else {
+      sb.classList.add('translate-x-full');
+      sb.setAttribute('aria-hidden','true');
+    }
+  });
+  document.getElementById('closeSidebar')?.addEventListener('click', ()=>{
+    const sb = document.getElementById('sidebar');
+    if(sb){ sb.classList.add('translate-x-full'); sb.setAttribute('aria-hidden','true'); }
+  });
+
+  // member search simple filter (ui-adapter will add role badges)
+  document.getElementById('memberSearch')?.addEventListener('input', (e)=>{
+    const q = (e.target.value || '').toLowerCase().trim();
+    const nodes = Array.from(document.querySelectorAll('#memberList .member-row'));
+    nodes.forEach(n => {
+      const txt = (n.textContent || '').toLowerCase();
+      n.style.display = txt.indexOf(q) === -1 ? 'none' : '';
+    });
+  });
+
+  // unread button scroll behavior
+  const unreadBtn = document.getElementById('unreadBtn');
+  unreadBtn?.addEventListener('click', ()=>{
+    const chat = document.getElementById('chat');
+    if(chat){
+      chat.scrollTop = chat.scrollHeight;
+      unreadBtn.style.display = 'none';
+    }
+  });
+
+  // load persisted pinned message (if any)
+  (function loadPinned(){
+    const txt = localStorage.getItem('pinned_message_text');
+    if(txt){
+      const pb = document.getElementById('pinnedText');
+      if(pb) pb.textContent = txt;
+      const banner = document.getElementById('pinnedBanner');
+      if(banner) banner.classList.remove('hidden');
+    }
+  })();
+
+  // basic auto-scroll hide/unread logic on manual scroll
+  const chatEl = document.getElementById('chat');
+  if(chatEl){
+    chatEl.addEventListener('scroll', ()=>{
+      const btn = document.getElementById('unreadBtn');
+      if(!btn) return;
+      if(chatEl.scrollTop + chatEl.clientHeight >= chatEl.scrollHeight - 60){
+        btn.style.display = 'none';
+      } else {
+        btn.style.display = 'block';
+      }
+    }, {passive:true});
+  }
+
+  /* ------------------ Bootstrapping: wire simulation pieces if present ------------------ */
+  function safeInit(){
+    try{
+      // ensure icons are created when DOM updates (icons.js will expose _abrox.iconify)
+      if(window._abrox && typeof window._abrox.iconify === 'function'){
+        window._abrox.iconify();
+      }
+    }catch(e){ console.warn('safeInit icons', e); }
+
+    // expose debug helper to force re-run of safeInit from console
+    window._abrox.bootstrap = safeInit;
+  }
+
+  // Run bootstrap after a tiny delay to allow external scripts to auto-init
+  setTimeout(safeInit, 300);
+
+})(); // end UI glue
+</script>
+
+</body>
+</html>
